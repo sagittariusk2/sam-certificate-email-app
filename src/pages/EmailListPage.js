@@ -88,6 +88,8 @@ export default function EmailListPage(params) {
       Query.equal("email_list_id", listId),
     ]);
 
+    var isCompleted = "COMPLETED";
+
     for (let i in tempList.list) {
       const c = newStatusList.find(
         (value) =>
@@ -95,9 +97,17 @@ export default function EmailListPage(params) {
           value.name === tempList.list[i].name
       );
       if (c) tempList.list[i] = { ...c };
+
+      if (!tempList.list[i]?.email_sent) {
+        isCompleted = "IN_PROGRESS";
+      }
     }
 
-    console.log(tempList);
+    await appwriteDatabases.updateDocument(db, collection.emailLists, listId, {
+      status: "COMPLETED",
+    });
+
+    console.log({ ...tempList, status: isCompleted });
     setCurrentList(tempList);
     setLoading(false);
   };
