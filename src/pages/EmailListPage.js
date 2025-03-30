@@ -128,6 +128,8 @@ export default function EmailListPage(params) {
       message: `Email list "${currentList.name}" has been scheduled successfully!`,
       severity: "success",
     });
+
+    await fetchEmailLists();
   };
 
   // Snackbar close handler
