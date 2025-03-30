@@ -253,15 +253,11 @@ function AllListsPage() {
                 <TableRow>
                   <TableCell>List Name</TableCell>
                   <TableCell>Email Count</TableCell>
-                  <TableCell>Sent Status</TableCell>
                   <TableCell>Created At</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {allLists.map((emailList) => {
-                  const sentCount = emailList.list
-                    ? emailList.list.filter((email) => email.status).length
-                    : 0;
                   const totalCount = emailList.list.length;
 
                   return (
@@ -273,9 +269,6 @@ function AllListsPage() {
                     >
                       <TableCell>{emailList.name}</TableCell>
                       <TableCell>{totalCount}</TableCell>
-                      <TableCell>
-                        {sentCount}/{totalCount} sent
-                      </TableCell>
                       <TableCell>{emailList.$createdAt}</TableCell>
                     </TableRow>
                   );
