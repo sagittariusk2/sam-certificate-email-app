@@ -94,9 +94,10 @@ export default function EmailListPage(params) {
           value.email === tempList.list[i].email &&
           value.name === tempList.list[i].name
       );
-      tempList.list[i] = { ...c };
+      if (c) tempList.list[i] = { ...c };
     }
 
+    console.log(tempList);
     setCurrentList(tempList);
     setLoading(false);
   };
@@ -190,7 +191,7 @@ export default function EmailListPage(params) {
                   <TableCell>{email.email}</TableCell>
                   <TableCell>{email.name}</TableCell>
                   <TableCell>{email.hour}</TableCell>
-                  <TableCell>{email.certificate_id}</TableCell>
+                  <TableCell>{email?.certificate_id}</TableCell>
                   <TableCell>
                     {email.email_sent ? (
                       <span style={{ color: "green" }}>Sent</span>
