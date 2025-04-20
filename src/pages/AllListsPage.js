@@ -90,10 +90,14 @@ function AllListsPage() {
     setLoading(true);
     var emailLists = await listAllDocuments(db, collection.emailLists, [
       Query.orderDesc("$createdAt"),
+      Query.limit(100),
     ]);
 
     for (let i in emailLists) {
       emailLists[i].list = emailLists[i].list.map((x) => JSON.parse(x));
+      emailLists[i].$createdAt = new Date(
+        emailLists[i].$createdAt
+      ).toLocaleString();
     }
 
     setAllLists(emailLists);
@@ -126,27 +130,69 @@ function AllListsPage() {
     }
   };
 
+  const validateEmail = (email) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
+
   const parseCSVFile = (file) => {
     const reader = new FileReader();
     reader.onload = (e) => {
       const content = e.target.result;
       const lines = content.split("\n");
 
+      const uniqueSet = new Set();
       const parsedEmails = [];
+      const invalidEmails = [];
+
       // Start from index 1 to skip header row
       for (let i = 1; i < lines.length; i++) {
         if (lines[i].trim() === "") continue;
 
         const values = lines[i].split(",");
         if (values.length >= 3) {
-          parsedEmails.push({
-            name: values[0]?.trim() || "",
-            email: values[1]?.trim() || "",
-            hour: values[2]?.trim() || "",
-            status: false,
-          });
+          const name = values[0]?.trim() || "";
+          const email = values[1]?.trim() || "";
+          const hour = values[2]?.trim() || "";
+
+          // Validate email
+          if (!validateEmail(email)) {
+            invalidEmails.push({ email, line: i + 1 });
+            continue;
+          }
+
+          // Create a unique key combining all three fields
+          const uniqueKey = `${name}|${email}|${hour}`;
+
+          if (name && email && hour && !uniqueSet.has(uniqueKey)) {
+            uniqueSet.add(uniqueKey);
+            parsedEmails.push({
+              name: name,
+              email: email,
+              hour: hour,
+              status: false,
+            });
+          }
         }
       }
+
+      if (invalidEmails.length > 0) {
+        const errorMessage = `Invalid email(s) found:\n${invalidEmails
+          .map((e) => `Line ${e.line}: ${e.email}`)
+          .join("\n")}`;
+        setSnackbar({
+          open: true,
+          message: errorMessage,
+          severity: "error",
+        });
+        setUploadedFile(null);
+        setParsedData([]);
+        if (fileInputRef.current) {
+          fileInputRef.current.value = "";
+        }
+        return;
+      }
+
       setParsedData(parsedEmails);
     };
     reader.readAsText(file);
@@ -254,6 +300,7 @@ function AllListsPage() {
                   <TableCell>List Name</TableCell>
                   <TableCell>Email Count</TableCell>
                   <TableCell>Created At</TableCell>
+                  <TableCell>Status</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -270,6 +317,7 @@ function AllListsPage() {
                       <TableCell>{emailList.name}</TableCell>
                       <TableCell>{totalCount}</TableCell>
                       <TableCell>{emailList.$createdAt}</TableCell>
+                      <TableCell>{emailList.status}</TableCell>
                     </TableRow>
                   );
                 })}

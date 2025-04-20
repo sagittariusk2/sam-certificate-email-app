@@ -12,10 +12,17 @@ import {
   Box,
   Alert,
   Snackbar,
+  Stepper,
+  Step,
+  StepLabel,
 } from "@mui/material";
 import { useEffect, useState } from "react";
 import SendIcon from "@mui/icons-material/Send";
-import { Client, Databases, Functions, Query } from "appwrite";
+import AssignmentIcon from "@mui/icons-material/Assignment";
+import ReplayIcon from "@mui/icons-material/Replay";
+import { Client, Databases, Functions } from "appwrite";
+import CertificateRow from "../components/CertificateRow";
+import PendingIcon from "@mui/icons-material/Pending";
 
 const appwriteClient = new Client()
   .setEndpoint("https://cloud.appwrite.io/v1")
@@ -29,7 +36,37 @@ const collection = {
   certificates: "certificates",
 };
 
-export default function EmailListPage(params) {
+const listStatus = {
+  DRAFT: "DRAFT",
+  CERTIFICATE_ASSIGNMENT_IN_PROGRESS: "CERTIFICATE_ASSIGNMENT_IN_PROGRESS",
+  CERTIFICATE_ASSIGNMENT_FAILED: "CERTIFICATE_ASSIGNMENT_FAILED",
+  CERTIFICATE_ASSIGNED: "CERTIFICATE_ASSIGNED",
+  EMAIL_SEND_IN_PROGRESS: "EMAIL_SEND_IN_PROGRESS",
+  EMAIL_SEND_FAILED: "EMAIL_SEND_FAILED",
+  EMAIL_SENT: "EMAIL_SENT",
+};
+
+const steps = [
+  { label: "Draft", value: listStatus.DRAFT },
+  {
+    label: "Certificate Assignment",
+    values: [
+      listStatus.CERTIFICATE_ASSIGNMENT_IN_PROGRESS,
+      listStatus.CERTIFICATE_ASSIGNMENT_FAILED,
+      listStatus.CERTIFICATE_ASSIGNED,
+    ],
+  },
+  {
+    label: "Email Sending",
+    values: [
+      listStatus.EMAIL_SEND_IN_PROGRESS,
+      listStatus.EMAIL_SEND_FAILED,
+      listStatus.EMAIL_SENT,
+    ],
+  },
+];
+
+export default function EmailListPage() {
   const listId = window.location.pathname.split("/")[1];
 
   const [loading, setLoading] = useState(true);
@@ -39,40 +76,6 @@ export default function EmailListPage(params) {
     message: "",
     severity: "success",
   });
-
-  const listAllDocuments = async (databaseId, collectionId, queries) => {
-    var res = [];
-    var tempQueries = queries;
-    tempQueries.push(Query.limit(100));
-    const page0 = await appwriteDatabases.listDocuments(
-      databaseId,
-      collectionId,
-      tempQueries
-    );
-    if (page0.documents.length === 0) return res;
-    res = res.concat(page0.documents);
-    var availableNext = true;
-    var lastId = page0.documents[page0.documents.length - 1].$id;
-    while (availableNext) {
-      var tempQueries_2 = [];
-      for (let i in tempQueries) {
-        tempQueries_2.push(tempQueries[i]);
-      }
-      tempQueries_2.push(Query.cursorAfter(lastId));
-      const nextPage = await appwriteDatabases.listDocuments(
-        databaseId,
-        collectionId,
-        tempQueries_2
-      );
-      if (nextPage.documents.length === 0) {
-        availableNext = false;
-      } else {
-        res = res.concat(nextPage.documents);
-        lastId = nextPage.documents[nextPage.documents.length - 1].$id;
-      }
-    }
-    return res;
-  };
 
   const fetchEmailLists = async () => {
     setLoading(true);
@@ -84,30 +87,6 @@ export default function EmailListPage(params) {
 
     tempList.list = tempList.list.map((x) => JSON.parse(x));
 
-    const newStatusList = await listAllDocuments(db, collection.certificates, [
-      Query.equal("email_list_id", listId),
-    ]);
-
-    var isCompleted = "COMPLETED";
-
-    for (let i in tempList.list) {
-      const c = newStatusList.find(
-        (value) =>
-          value.email === tempList.list[i].email &&
-          value.name === tempList.list[i].name
-      );
-      if (c) tempList.list[i] = { ...c };
-
-      if (!tempList.list[i]?.email_sent) {
-        isCompleted = "IN_PROGRESS";
-      }
-    }
-
-    await appwriteDatabases.updateDocument(db, collection.emailLists, listId, {
-      status: "COMPLETED",
-    });
-
-    console.log({ ...tempList, status: isCompleted });
     setCurrentList(tempList);
     setLoading(false);
   };
@@ -118,17 +97,11 @@ export default function EmailListPage(params) {
   }, []);
 
   const handleSendEmails = async () => {
-    await appwriteDatabases.updateDocument(
-      db,
-      collection.emailLists,
-      currentList.$id,
-      {
-        status: "IN_PROGRESS",
-      }
-    );
-
+    await appwriteDatabases.updateDocument(db, collection.emailLists, listId, {
+      status: listStatus.EMAIL_SEND_IN_PROGRESS,
+    });
     appwriteFunctions.createExecution(
-      "create-email-obj",
+      "send-email",
       JSON.stringify({ doc: currentList.$id }),
       true
     );
@@ -139,7 +112,116 @@ export default function EmailListPage(params) {
       severity: "success",
     });
 
-    await fetchEmailLists();
+    setCurrentList({
+      ...currentList,
+      status: listStatus.EMAIL_SEND_IN_PROGRESS,
+    });
+  };
+
+  const handleAssignCertificates = async () => {
+    await appwriteDatabases.updateDocument(db, collection.emailLists, listId, {
+      status: listStatus.CERTIFICATE_ASSIGNMENT_IN_PROGRESS,
+    });
+    appwriteFunctions.createExecution(
+      "create-email-obj",
+      JSON.stringify({ doc: currentList.$id }),
+      true
+    );
+
+    setSnackbar({
+      open: true,
+      message: `Certificate assignment for "${currentList.name}" has been scheduled!`,
+      severity: "success",
+    });
+
+    setCurrentList({
+      ...currentList,
+      status: listStatus.CERTIFICATE_ASSIGNMENT_IN_PROGRESS,
+    });
+  };
+
+  const getActiveStep = (status) => {
+    if (status === listStatus.DRAFT) return 1;
+    else if (status === listStatus.CERTIFICATE_ASSIGNMENT_IN_PROGRESS) return 1;
+    else if (status === listStatus.CERTIFICATE_ASSIGNMENT_FAILED) return 1;
+    else if (status === listStatus.CERTIFICATE_ASSIGNED) return 2;
+    else if (status === listStatus.EMAIL_SEND_IN_PROGRESS) return 2;
+    else if (status === listStatus.EMAIL_SEND_FAILED) return 2;
+    else if (status === listStatus.EMAIL_SENT) return 3;
+    else return 0;
+  };
+
+  const getStepState = (stepIndex, currentStatus) => {
+    if (stepIndex === 1) {
+      if (currentStatus === listStatus.CERTIFICATE_ASSIGNMENT_IN_PROGRESS) {
+        return "in-progress";
+      } else if (currentStatus === listStatus.CERTIFICATE_ASSIGNMENT_FAILED) {
+        return "error";
+      } else {
+        return "success";
+      }
+    } else if (stepIndex === 2) {
+      if (currentStatus === listStatus.EMAIL_SEND_IN_PROGRESS) {
+        return "in-progress";
+      } else if (currentStatus === listStatus.EMAIL_SEND_FAILED) {
+        return "error";
+      } else {
+        return "success";
+      }
+    } else {
+      return "default";
+    }
+  };
+
+  const getButtonProps = (status) => {
+    if (status === listStatus.DRAFT) {
+      return {
+        text: "Assign Certificates",
+        onClick: handleAssignCertificates,
+        disabled: false,
+        show: true,
+      };
+    }
+    if (status === listStatus.CERTIFICATE_ASSIGNMENT_FAILED) {
+      return {
+        text: "Retry Certificate Assignment",
+        onClick: handleAssignCertificates,
+        disabled: false,
+        show: true,
+      };
+    }
+    if (status === listStatus.CERTIFICATE_ASSIGNED) {
+      return {
+        text: "Send Emails",
+        onClick: handleSendEmails,
+        disabled: false,
+        show: true,
+      };
+    }
+    if (status === listStatus.EMAIL_SEND_FAILED) {
+      return {
+        text: "Retry Sending Emails",
+        onClick: handleSendEmails,
+        disabled: false,
+        show: true,
+      };
+    }
+    if (
+      status === listStatus.CERTIFICATE_ASSIGNMENT_IN_PROGRESS ||
+      status === listStatus.EMAIL_SEND_IN_PROGRESS
+    ) {
+      return {
+        show: false,
+      };
+    }
+    if (status === listStatus.EMAIL_SENT) {
+      return {
+        show: false,
+      };
+    }
+    return {
+      show: false,
+    };
   };
 
   // Snackbar close handler
@@ -160,22 +242,60 @@ export default function EmailListPage(params) {
         <Typography variant="h4" component="h1">
           {currentList?.name}
         </Typography>
-        <Button
-          variant="contained"
-          color="primary"
-          startIcon={<SendIcon />}
-          onClick={(e) => {
-            handleSendEmails();
-          }}
-          disabled={currentList?.status !== "DRAFT"}
-        >
-          {currentList?.status === "DRAFT"
-            ? "Schedule Mailing"
-            : currentList?.status === "IN_PROGRESS"
-            ? "Mail Send is In Progress"
-            : "Sent successfully"}
-        </Button>
+        {currentList && getButtonProps(currentList.status).show && (
+          <Button
+            variant="contained"
+            color="primary"
+            startIcon={
+              currentList.status === listStatus.DRAFT ||
+              currentList.status ===
+                listStatus.CERTIFICATE_ASSIGNMENT_FAILED ? (
+                <AssignmentIcon />
+              ) : currentList.status === listStatus.CERTIFICATE_ASSIGNED ||
+                currentList.status === listStatus.EMAIL_SEND_FAILED ? (
+                <SendIcon />
+              ) : (
+                <ReplayIcon />
+              )
+            }
+            onClick={getButtonProps(currentList.status).onClick}
+            disabled={getButtonProps(currentList.status).disabled}
+          >
+            {getButtonProps(currentList.status).text}
+          </Button>
+        )}
       </Box>
+
+      {currentList &&
+        (currentList.status === listStatus.CERTIFICATE_ASSIGNMENT_IN_PROGRESS ||
+          currentList.status === listStatus.EMAIL_SEND_IN_PROGRESS) && (
+          <Alert severity="info" sx={{ mb: 3 }}>
+            The process is running in the background. Refresh the page manually
+            to see the latest status.
+          </Alert>
+        )}
+
+      {currentList && (
+        <Box sx={{ mb: 3 }}>
+          <Stepper activeStep={getActiveStep(currentList.status)}>
+            {steps.map((step, index) => (
+              <Step key={index}>
+                <StepLabel
+                  error={getStepState(index, currentList.status) === "error"}
+                  icon={
+                    getStepState(index, currentList.status) ===
+                    "in-progress" ? (
+                      <PendingIcon />
+                    ) : undefined
+                  }
+                >
+                  {step.label}
+                </StepLabel>
+              </Step>
+            ))}
+          </Stepper>
+        </Box>
+      )}
 
       {loading && (
         <Paper sx={{ p: 4, textAlign: "center" }}>
@@ -199,19 +319,14 @@ export default function EmailListPage(params) {
             </TableHead>
             <TableBody>
               {currentList.list.map((email, index) => (
-                <TableRow key={index}>
-                  <TableCell>{email.email}</TableCell>
-                  <TableCell>{email.name}</TableCell>
-                  <TableCell>{email.hour}</TableCell>
-                  <TableCell>{email?.certificate_id}</TableCell>
-                  <TableCell>
-                    {email.email_sent ? (
-                      <span style={{ color: "green" }}>Sent</span>
-                    ) : (
-                      <span style={{ color: "red" }}>Not Sent</span>
-                    )}
-                  </TableCell>
-                </TableRow>
+                <CertificateRow
+                  email={email.email}
+                  name={email.name}
+                  hour={email.hour}
+                  listId={listId}
+                  appwriteDatabases={appwriteDatabases}
+                  key={index}
+                />
               ))}
               {(!currentList || currentList.list.length === 0) && (
                 <TableRow>
