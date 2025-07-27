@@ -141,19 +141,41 @@ function AllListsPage() {
       const content = e.target.result;
       const lines = content.split("\n");
 
+      const header = lines[0].split(",").map((h) => h.trim().toLowerCase());
+      const requiredColumns = ["name", "email", "hour", "college"];
+      const missingColumns = requiredColumns.filter(
+        (col) => !header.includes(col)
+      );
+
+      if (missingColumns.length > 0) {
+        setSnackbar({
+          open: true,
+          message: `CSV header must include: ${missingColumns.join(", ")}`,
+          severity: "error",
+        });
+        setUploadedFile(null);
+        setParsedData([]);
+        if (fileInputRef.current) {
+          fileInputRef.current.value = "";
+        }
+        return;
+      }
+
       const uniqueSet = new Set();
       const parsedEmails = [];
       const invalidEmails = [];
+      const duplicatePairs = [];
 
       // Start from index 1 to skip header row
       for (let i = 1; i < lines.length; i++) {
         if (lines[i].trim() === "") continue;
 
         const values = lines[i].split(",");
-        if (values.length >= 3) {
+        if (values.length >= 4) {
           const name = values[0]?.trim() || "";
           const email = values[1]?.trim() || "";
-          const hour = values[2]?.trim() || "";
+          const college = values[2]?.trim() || "";
+          const hour = values[3]?.trim() || "";
 
           // Validate email
           if (!validateEmail(email)) {
@@ -161,17 +183,21 @@ function AllListsPage() {
             continue;
           }
 
-          // Create a unique key combining all three fields
-          const uniqueKey = `${name}|${email}|${hour}`;
+          // Uniqueness only on name+email
+          const uniqueKey = `${name}|${email}`;
 
-          if (name && email && hour && !uniqueSet.has(uniqueKey)) {
-            uniqueSet.add(uniqueKey);
-            parsedEmails.push({
-              name: name,
-              email: email,
-              hour: hour,
-              status: false,
-            });
+          if (name && email && hour) {
+            if (uniqueSet.has(uniqueKey)) {
+              duplicatePairs.push({ name, email, line: i + 1 });
+            } else {
+              uniqueSet.add(uniqueKey);
+              parsedEmails.push({
+                name: name,
+                email: email,
+                hour: hour,
+                college: college,
+              });
+            }
           }
         }
       }
@@ -179,6 +205,23 @@ function AllListsPage() {
       if (invalidEmails.length > 0) {
         const errorMessage = `Invalid email(s) found:\n${invalidEmails
           .map((e) => `Line ${e.line}: ${e.email}`)
+          .join("\n")}`;
+        setSnackbar({
+          open: true,
+          message: errorMessage,
+          severity: "error",
+        });
+        setUploadedFile(null);
+        setParsedData([]);
+        if (fileInputRef.current) {
+          fileInputRef.current.value = "";
+        }
+        return;
+      }
+
+      if (duplicatePairs.length > 0) {
+        const errorMessage = `Duplicate (name, email) pairs found. Please remove these duplicates and try again:\n${duplicatePairs
+          .map((d) => `Line ${d.line}: (${d.name}, ${d.email})`)
           .join("\n")}`;
         setSnackbar({
           open: true,
@@ -272,7 +315,7 @@ function AllListsPage() {
         }}
       >
         <Typography variant="h4" component="h1">
-          All Email Lists
+          Campaign Certificate List
         </Typography>
         <Button
           variant="contained"
@@ -292,32 +335,83 @@ function AllListsPage() {
       )}
 
       {allLists.length > 0 ? (
-        <Paper sx={{ width: "100%", mb: 2 }}>
+        <Paper sx={{ width: "100%", mb: 2, boxShadow: 6, borderRadius: 3 }}>
           <TableContainer>
             <Table>
               <TableHead>
-                <TableRow>
-                  <TableCell>List Name</TableCell>
-                  <TableCell>Email Count</TableCell>
-                  <TableCell>Created At</TableCell>
-                  <TableCell>Status</TableCell>
+                <TableRow sx={{ backgroundColor: "primary.main" }}>
+                  <TableCell
+                    sx={{
+                      fontWeight: "bold",
+                      color: "white",
+                      fontSize: 16,
+                      py: 2,
+                    }}
+                  >
+                    Campaign Name
+                  </TableCell>
+                  <TableCell
+                    sx={{
+                      fontWeight: "bold",
+                      color: "white",
+                      fontSize: 16,
+                      py: 2,
+                    }}
+                  >
+                    # of Participants
+                  </TableCell>
+                  <TableCell
+                    sx={{
+                      fontWeight: "bold",
+                      color: "white",
+                      fontSize: 16,
+                      py: 2,
+                    }}
+                  >
+                    Created At
+                  </TableCell>
+                  <TableCell
+                    sx={{
+                      fontWeight: "bold",
+                      color: "white",
+                      fontSize: 16,
+                      py: 2,
+                    }}
+                  >
+                    Status
+                  </TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {allLists.map((emailList) => {
+                {allLists.map((emailList, idx) => {
                   const totalCount = emailList.list.length;
-
+                  const isStriped = idx % 2 === 1;
                   return (
                     <TableRow
                       key={emailList.$id}
                       hover
                       onClick={() => navigate(`/${emailList.$id}`)}
-                      sx={{ cursor: "pointer" }}
+                      sx={{
+                        cursor: "pointer",
+                        backgroundColor: isStriped ? "grey.100" : "white",
+                        transition: "background 0.2s",
+                        "&:hover": {
+                          backgroundColor: "secondary.light",
+                        },
+                      }}
                     >
-                      <TableCell>{emailList.name}</TableCell>
-                      <TableCell>{totalCount}</TableCell>
-                      <TableCell>{emailList.$createdAt}</TableCell>
-                      <TableCell>{emailList.status}</TableCell>
+                      <TableCell sx={{ py: 2, fontSize: 15 }}>
+                        {emailList.name}
+                      </TableCell>
+                      <TableCell sx={{ py: 2, fontSize: 15 }}>
+                        {totalCount}
+                      </TableCell>
+                      <TableCell sx={{ py: 2, fontSize: 15 }}>
+                        {emailList.$createdAt}
+                      </TableCell>
+                      <TableCell sx={{ py: 2, fontSize: 15 }}>
+                        {emailList.status}
+                      </TableCell>
                     </TableRow>
                   );
                 })}
@@ -347,22 +441,23 @@ function AllListsPage() {
         fullWidth
         maxWidth="sm"
       >
-        <DialogTitle>Create New Email List</DialogTitle>
+        <DialogTitle>Create New Campaign Certificate List</DialogTitle>
         <DialogContent>
           <DialogContentText sx={{ mb: 2 }}>
             Upload a CSV file with email data. The CSV should have columns for
-            email, name, and hour.
+            email, name, hour and college.
           </DialogContentText>
 
           <TextField
             autoFocus
             margin="dense"
-            label="List Name"
+            label="Campaign Name"
             fullWidth
             value={listNameInput}
             onChange={(e) => setListNameInput(e.target.value)}
             variant="outlined"
             sx={{ mb: 3 }}
+            required
           />
 
           <input
@@ -381,6 +476,25 @@ function AllListsPage() {
               py: 2,
             }}
           >
+            {/* Note above Select CSV File button */}
+            <Alert severity="info" sx={{ mb: 2, width: "100%" }}>
+              <strong>Note:</strong>
+              <ul style={{ margin: 0, paddingLeft: "1.2em" }}>
+                <li>
+                  <b>name</b>, <b>email</b>, <b>college</b>, <b>hour</b> should
+                  be <b>mandatory</b> in the CSV file.
+                </li>
+                <li>
+                  There should be <b>no duplicate row</b> (same name & email).
+                </li>
+                <li>
+                  Email should be <b>valid</b>.
+                </li>
+                <li>
+                  There should not be any comma (<b>,</b>) in the college.
+                </li>
+              </ul>
+            </Alert>
             <Button
               variant="outlined"
               component="span"
@@ -403,6 +517,58 @@ function AllListsPage() {
                 CSV file.
               </Alert>
             )}
+
+            <Box
+              sx={{
+                mt: 2,
+                p: 2,
+                backgroundColor: "grey.50",
+                borderRadius: 1,
+                border: "1px solid grey.300",
+                fontFamily: "monospace",
+                fontSize: "0.875rem",
+              }}
+            >
+              <Typography variant="body2" sx={{ mb: 1, fontWeight: "bold" }}>
+                CSV file should look like this:
+              </Typography>
+              <Box
+                sx={{
+                  backgroundColor: "white",
+                  p: 1,
+                  borderRadius: 0.5,
+                  border: "1px solid grey.400",
+                }}
+              >
+                <div
+                  style={{
+                    backgroundColor: "#e3f2fd",
+                    padding: "4px 8px",
+                    fontWeight: "bold",
+                    borderBottom: "1px solid #bbdefb",
+                  }}
+                >
+                  name,email,college,hour
+                </div>
+                <div
+                  style={{
+                    backgroundColor: "#f3e5f5",
+                    padding: "4px 8px",
+                    borderBottom: "1px solid #e1bee7",
+                  }}
+                >
+                  Sam,volunteer@sam.org,Indian Institution of Technology Patna,2
+                </div>
+                <div
+                  style={{
+                    backgroundColor: "#e8f5e8",
+                    padding: "4px 8px",
+                  }}
+                >
+                  John,john@example.com,University of Delhi,3
+                </div>
+              </Box>
+            </Box>
           </Box>
         </DialogContent>
         <DialogActions>

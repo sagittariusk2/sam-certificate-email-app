@@ -102,7 +102,7 @@ export default function EmailListPage() {
     });
     appwriteFunctions.createExecution(
       "send-email",
-      JSON.stringify({ doc: currentList.$id }),
+      JSON.stringify({ campaignId: currentList.$id }),
       true
     );
 
@@ -124,7 +124,7 @@ export default function EmailListPage() {
     });
     appwriteFunctions.createExecution(
       "create-email-obj",
-      JSON.stringify({ doc: currentList.$id }),
+      JSON.stringify({ campaignId: currentList.$id }),
       true
     );
 
@@ -306,38 +306,121 @@ export default function EmailListPage() {
       )}
 
       {currentList && (
-        <TableContainer component={Paper}>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>Email</TableCell>
-                <TableCell>Name</TableCell>
-                <TableCell>Hour</TableCell>
-                <TableCell>Certificate ID</TableCell>
-                <TableCell>Status</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {currentList.list.map((email, index) => (
-                <CertificateRow
-                  email={email.email}
-                  name={email.name}
-                  hour={email.hour}
-                  listId={listId}
-                  appwriteDatabases={appwriteDatabases}
-                  key={index}
-                />
-              ))}
-              {(!currentList || currentList.list.length === 0) && (
-                <TableRow>
-                  <TableCell colSpan={4} align="center">
-                    This list has no emails.
+        <Paper sx={{ width: "100%", mb: 2, boxShadow: 6, borderRadius: 3 }}>
+          <TableContainer>
+            <Table>
+              <TableHead>
+                <TableRow sx={{ backgroundColor: "primary.main" }}>
+                  <TableCell
+                    sx={{
+                      fontWeight: "bold",
+                      color: "white",
+                      fontSize: 16,
+                      py: 2,
+                    }}
+                  >
+                    S.No.
+                  </TableCell>
+                  <TableCell
+                    sx={{
+                      fontWeight: "bold",
+                      color: "white",
+                      fontSize: 16,
+                      py: 2,
+                    }}
+                  >
+                    Email
+                  </TableCell>
+                  <TableCell
+                    sx={{
+                      fontWeight: "bold",
+                      color: "white",
+                      fontSize: 16,
+                      py: 2,
+                    }}
+                  >
+                    Name
+                  </TableCell>
+                  <TableCell
+                    sx={{
+                      fontWeight: "bold",
+                      color: "white",
+                      fontSize: 16,
+                      py: 2,
+                    }}
+                  >
+                    College
+                  </TableCell>
+                  <TableCell
+                    sx={{
+                      fontWeight: "bold",
+                      color: "white",
+                      fontSize: 16,
+                      py: 2,
+                    }}
+                  >
+                    Hour
+                  </TableCell>
+                  <TableCell
+                    sx={{
+                      fontWeight: "bold",
+                      color: "white",
+                      fontSize: 16,
+                      py: 2,
+                    }}
+                  >
+                    Certificate
+                  </TableCell>
+                  <TableCell
+                    sx={{
+                      fontWeight: "bold",
+                      color: "white",
+                      fontSize: 16,
+                      py: 2,
+                    }}
+                  >
+                    Status
                   </TableCell>
                 </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </TableContainer>
+              </TableHead>
+              <TableBody>
+                {currentList.list.map((email, index) => {
+                  const isStriped = index % 2 === 1;
+                  return (
+                    <TableRow
+                      key={index}
+                      hover
+                      sx={{
+                        backgroundColor: isStriped ? "grey.100" : "white",
+                        transition: "background 0.2s",
+                        "&:hover": {
+                          backgroundColor: "secondary.light",
+                        },
+                      }}
+                    >
+                      <CertificateRow
+                        email={email.email}
+                        name={email.name}
+                        college={email.college}
+                        hour={email.hour}
+                        listId={listId}
+                        appwriteDatabases={appwriteDatabases}
+                        index={index}
+                      />
+                    </TableRow>
+                  );
+                })}
+                {(!currentList || currentList.list.length === 0) && (
+                  <TableRow>
+                    <TableCell colSpan={7} align="center">
+                      This list has no emails.
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </Paper>
       )}
 
       {/* Snackbar for notifications */}
