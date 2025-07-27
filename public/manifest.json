@@ -1,6 +1,7 @@
 {
-  "short_name": "React App",
-  "name": "Create React App Sample",
+  "short_name": "SAM Certificate",
+  "name": "Social Action Mobilizer Certificate Manger",
+  "description": "A web app to view/manage/store the certificates of different compaigns and events for the Social Action Mobilizer (SAM).",
   "icons": [
     {
       "src": "favicon.ico",
