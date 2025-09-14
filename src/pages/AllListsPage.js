@@ -24,6 +24,7 @@ import {
 import CloudUploadIcon from "@mui/icons-material/CloudUpload";
 import { Client, Databases, Query, ID } from "appwrite";
 import { useNavigate } from "react-router-dom";
+import Papa from "papaparse";
 
 const appwriteClient = new Client()
   .setEndpoint("https://cloud.appwrite.io/v1")
@@ -125,79 +126,107 @@ function AllListsPage() {
   };
 
   const parseCSVFile = (file) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const content = e.target.result;
-      const lines = content.split("\n");
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      complete: (results) => {
+        const { data, meta } = results;
 
-      const header = lines[0].split(",").map((h) => h.trim().toLowerCase());
-      const requiredColumns = ["name", "email", "hour", "college"];
-      const missingColumns = requiredColumns.filter(
-        (col) => !header.includes(col)
-      );
+        // 1. Header validation
+        const header = meta.fields.map((h) => h.trim().toLowerCase());
+        const requiredColumns = ["name", "email", "hour", "college"];
+        const missingColumns = requiredColumns.filter(
+          (col) => !header.includes(col)
+        );
 
-      if (missingColumns.length > 0) {
-        setSnackbar({
-          open: true,
-          message: `CSV header must include: ${missingColumns.join(", ")}`,
-          severity: "error",
-        });
-        setUploadedFile(null);
-        setParsedData([]);
-        if (fileInputRef.current) {
-          fileInputRef.current.value = "";
+        if (missingColumns.length > 0) {
+          setSnackbar({
+            open: true,
+            message: `CSV header must include: ${missingColumns.join(", ")}`,
+            severity: "error",
+          });
+          setUploadedFile(null);
+          setParsedData([]);
+          if (fileInputRef.current) {
+            fileInputRef.current.value = "";
+          }
+          return;
         }
-        return;
-      }
 
-      const uniqueSet = new Set();
-      const parsedEmails = [];
-      const invalidEmails = [];
-      const duplicatePairs = [];
+        const uniqueSet = new Set();
+        const parsedEmails = [];
+        const invalidEmails = [];
+        const duplicatePairs = [];
 
-      // Start from index 1 to skip header row
-      for (let i = 1; i < lines.length; i++) {
-        if (lines[i].trim() === "") continue;
+        // 2. Row-level validation (email, duplicates)
+        data.forEach((row, index) => {
+          const name = row.name?.trim() || "";
+          const email = row.email?.trim() || "";
+          const college = row.college?.trim() || "";
+          const hour = row.hour?.trim() || "";
 
-        const values = lines[i].split(",");
-        if (values.length >= 4) {
-          const name = values[0]?.trim() || "";
-          const email = values[1]?.trim() || "";
-          const college = values[2]?.trim() || "";
-          const hour = values[3]?.trim() || "";
+          // The line number is index + 2 (1 for header, 1 for 0-based index)
+          const line = index + 2;
 
-          // Validate email
           if (!validateEmail(email)) {
-            invalidEmails.push({ email, line: i + 1 });
-            continue;
+            invalidEmails.push({ email, line });
+            return; // continue to next row
           }
 
-          // Uniqueness only on name+email
           const uniqueKey = `${name}|${email}`;
 
           if (name && email && hour) {
             if (uniqueSet.has(uniqueKey)) {
-              duplicatePairs.push({ name, email, line: i + 1 });
+              duplicatePairs.push({ name, email, line });
             } else {
               uniqueSet.add(uniqueKey);
-              parsedEmails.push({
-                name: name,
-                email: email,
-                hour: hour,
-                college: college,
-              });
+              parsedEmails.push({ name, email, hour, college });
             }
           }
-        }
-      }
+        });
 
-      if (invalidEmails.length > 0) {
-        const errorMessage = `Invalid email(s) found:\n${invalidEmails
-          .map((e) => `Line ${e.line}: ${e.email}`)
-          .join("\n")}`;
+        // 3. Handle validation errors
+        if (invalidEmails.length > 0) {
+          const errorMessage = `Invalid email(s) found:\n${invalidEmails
+            .map((e) => `Line ${e.line}: ${e.email}`)
+            .join("\n")}`;
+          setSnackbar({
+            open: true,
+            message: errorMessage,
+            severity: "error",
+          });
+          setUploadedFile(null);
+          setParsedData([]);
+          if (fileInputRef.current) {
+            fileInputRef.current.value = "";
+          }
+          return;
+        }
+
+        if (duplicatePairs.length > 0) {
+          const errorMessage = `Duplicate (name, email) pairs found. Please remove these duplicates and try again:\n${duplicatePairs
+            .map((d) => `Line ${d.line}: (${d.name}, ${d.email})`)
+            .join("\n")}`;
+          setSnackbar({
+            open: true,
+            message: errorMessage,
+            severity: "error",
+          });
+          setUploadedFile(null);
+          setParsedData([]);
+          if (fileInputRef.current) {
+            fileInputRef.current.value = "";
+          }
+          return;
+        }
+
+        // 4. Update state with parsed data
+        setParsedData(parsedEmails);
+      },
+      error: (error) => {
         setSnackbar({
           open: true,
-          message: errorMessage,
+          message: `Error parsing CSV: ${error.message}`,
           severity: "error",
         });
         setUploadedFile(null);
@@ -205,29 +234,8 @@ function AllListsPage() {
         if (fileInputRef.current) {
           fileInputRef.current.value = "";
         }
-        return;
-      }
-
-      if (duplicatePairs.length > 0) {
-        const errorMessage = `Duplicate (name, email) pairs found. Please remove these duplicates and try again:\n${duplicatePairs
-          .map((d) => `Line ${d.line}: (${d.name}, ${d.email})`)
-          .join("\n")}`;
-        setSnackbar({
-          open: true,
-          message: errorMessage,
-          severity: "error",
-        });
-        setUploadedFile(null);
-        setParsedData([]);
-        if (fileInputRef.current) {
-          fileInputRef.current.value = "";
-        }
-        return;
-      }
-
-      setParsedData(parsedEmails);
-    };
-    reader.readAsText(file);
+      },
+    });
   };
 
   const handleUploadConfirm = async () => {
