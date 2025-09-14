@@ -19,6 +19,7 @@ import {
   TextField,
   Alert,
   Snackbar,
+  Pagination,
 } from "@mui/material";
 import CloudUploadIcon from "@mui/icons-material/CloudUpload";
 import { Client, Databases, Query, ID } from "appwrite";
@@ -41,6 +42,9 @@ function AllListsPage() {
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [allLists, setAllLists] = useState([]);
+  const [totalItems, setTotalItems] = useState(0);
+  const [page, setPage] = useState(1);
+  const [rowsPerPage] = useState(10);
   const [openUploadDialog, setOpenUploadDialog] = useState(false);
   const [uploadedFile, setUploadedFile] = useState(null);
   const [listNameInput, setListNameInput] = useState("");
@@ -52,63 +56,48 @@ function AllListsPage() {
   });
   const fileInputRef = useRef(null);
 
-  const listAllDocuments = async (databaseId, collectionId, queries) => {
-    var res = [];
-    var tempQueries = queries;
-    tempQueries.push(Query.limit(100));
-    const page0 = await appwriteDatabases.listDocuments(
-      databaseId,
-      collectionId,
-      tempQueries
-    );
-    if (page0.documents.length === 0) return res;
-    res = res.concat(page0.documents);
-    var availableNext = true;
-    var lastId = page0.documents[page0.documents.length - 1].$id;
-    while (availableNext) {
-      var tempQueries_2 = [];
-      for (let i in tempQueries) {
-        tempQueries_2.push(tempQueries[i]);
-      }
-      tempQueries_2.push(Query.cursorAfter(lastId));
-      const nextPage = await appwriteDatabases.listDocuments(
-        databaseId,
-        collectionId,
-        tempQueries_2
-      );
-      if (nextPage.documents.length === 0) {
-        availableNext = false;
-      } else {
-        res = res.concat(nextPage.documents);
-        lastId = nextPage.documents[nextPage.documents.length - 1].$id;
-      }
-    }
-    return res;
-  };
-
   const fetchEmailLists = async () => {
     setLoading(true);
-    var emailLists = await listAllDocuments(db, collection.emailLists, [
-      Query.orderDesc("$createdAt"),
-      Query.limit(100),
-    ]);
+    try {
+      const offset = (page - 1) * rowsPerPage;
+      const response = await appwriteDatabases.listDocuments(
+        db,
+        collection.emailLists,
+        [
+          Query.orderDesc("$createdAt"),
+          Query.limit(rowsPerPage),
+          Query.offset(offset),
+        ]
+      );
 
-    for (let i in emailLists) {
-      emailLists[i].list = emailLists[i].list.map((x) => JSON.parse(x));
-      emailLists[i].$createdAt = new Date(
-        emailLists[i].$createdAt
-      ).toLocaleString();
+      setTotalItems(response.total);
+      const emailLists = response.documents;
+
+      for (let i in emailLists) {
+        emailLists[i].list = emailLists[i].list.map((x) => JSON.parse(x));
+        emailLists[i].$createdAt = new Date(
+          emailLists[i].$createdAt
+        ).toLocaleString();
+      }
+
+      setAllLists(emailLists);
+    } catch (error) {
+      console.error("Error fetching email lists:", error);
+      setSnackbar({
+        open: true,
+        message: "Failed to fetch email lists",
+        severity: "error",
+      });
+    } finally {
+      setLoading(false);
     }
-
-    setAllLists(emailLists);
-    setLoading(false);
   };
 
-  // Load lists on component mount
+  // Load lists on component mount and page change
   useEffect(() => {
     fetchEmailLists();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [page, rowsPerPage]);
 
   const handleOpenUploadDialog = () => {
     setUploadedFile(null);
@@ -326,20 +315,29 @@ function AllListsPage() {
         </Button>
       </Box>
 
-      {loading && (
+      {loading ? (
         <Paper sx={{ p: 4, textAlign: "center" }}>
           <Typography variant="body1" sx={{ mb: 2 }}>
             Loading data from server. Please wait....
           </Typography>
         </Paper>
-      )}
-
-      {allLists.length > 0 ? (
+      ) : allLists.length > 0 ? (
         <Paper sx={{ width: "100%", mb: 2, boxShadow: 6, borderRadius: 3 }}>
           <TableContainer>
             <Table>
               <TableHead>
                 <TableRow sx={{ backgroundColor: "primary.main" }}>
+                  <TableCell
+                    sx={{
+                      fontWeight: "bold",
+                      color: "white",
+                      fontSize: 16,
+                      py: 2,
+                      width: "60px",
+                    }}
+                  >
+                    #
+                  </TableCell>
                   <TableCell
                     sx={{
                       fontWeight: "bold",
@@ -401,6 +399,9 @@ function AllListsPage() {
                       }}
                     >
                       <TableCell sx={{ py: 2, fontSize: 15 }}>
+                        {(page - 1) * rowsPerPage + idx + 1}
+                      </TableCell>
+                      <TableCell sx={{ py: 2, fontSize: 15 }}>
                         {emailList.name}
                       </TableCell>
                       <TableCell sx={{ py: 2, fontSize: 15 }}>
@@ -418,6 +419,15 @@ function AllListsPage() {
               </TableBody>
             </Table>
           </TableContainer>
+          <Box sx={{ display: "flex", justifyContent: "center", p: 2 }}>
+            <Pagination
+              count={Math.ceil(totalItems / rowsPerPage)}
+              page={page}
+              onChange={(event, newPage) => setPage(newPage)}
+              color="primary"
+              size="large"
+            />
+          </Box>
         </Paper>
       ) : (
         <Paper sx={{ p: 4, textAlign: "center" }}>

@@ -20,6 +20,7 @@ import { useEffect, useState } from "react";
 import SendIcon from "@mui/icons-material/Send";
 import AssignmentIcon from "@mui/icons-material/Assignment";
 import ReplayIcon from "@mui/icons-material/Replay";
+import WorkIcon from "@mui/icons-material/Work";
 import { Client, Databases, Functions } from "appwrite";
 import CertificateRow from "../components/CertificateRow";
 import PendingIcon from "@mui/icons-material/Pending";
@@ -41,6 +42,9 @@ const listStatus = {
   CERTIFICATE_ASSIGNMENT_IN_PROGRESS: "CERTIFICATE_ASSIGNMENT_IN_PROGRESS",
   CERTIFICATE_ASSIGNMENT_FAILED: "CERTIFICATE_ASSIGNMENT_FAILED",
   CERTIFICATE_ASSIGNED: "CERTIFICATE_ASSIGNED",
+  CERTIFICATE_CREATION_IN_PROGRESS: "CERTIFICATE_CREATION_IN_PROGRESS",
+  CERTIFICATE_CREATION_FAILED: "CERTIFICATE_CREATION_FAILED",
+  CERTIFICATE_CREATED: "CERTIFICATE_CREATED",
   EMAIL_SEND_IN_PROGRESS: "EMAIL_SEND_IN_PROGRESS",
   EMAIL_SEND_FAILED: "EMAIL_SEND_FAILED",
   EMAIL_SENT: "EMAIL_SENT",
@@ -54,6 +58,14 @@ const steps = [
       listStatus.CERTIFICATE_ASSIGNMENT_IN_PROGRESS,
       listStatus.CERTIFICATE_ASSIGNMENT_FAILED,
       listStatus.CERTIFICATE_ASSIGNED,
+    ],
+  },
+  {
+    label: "Certificate Creation",
+    values: [
+      listStatus.CERTIFICATE_CREATION_IN_PROGRESS,
+      listStatus.CERTIFICATE_CREATION_FAILED,
+      listStatus.CERTIFICATE_CREATED,
     ],
   },
   {
@@ -95,6 +107,28 @@ export default function EmailListPage() {
     fetchEmailLists();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const handleCreateCertificates = async () => {
+    await appwriteDatabases.updateDocument(db, collection.emailLists, listId, {
+      status: listStatus.CERTIFICATE_CREATION_IN_PROGRESS,
+    });
+    appwriteFunctions.createExecution(
+      "create-certs",
+      JSON.stringify({ campaignId: currentList.$id }),
+      true
+    );
+
+    setSnackbar({
+      open: true,
+      message: `Certificate creation for "${currentList.name}" has been scheduled!`,
+      severity: "success",
+    });
+
+    setCurrentList({
+      ...currentList,
+      status: listStatus.CERTIFICATE_CREATION_IN_PROGRESS,
+    });
+  };
 
   const handleSendEmails = async () => {
     await appwriteDatabases.updateDocument(db, collection.emailLists, listId, {
@@ -145,9 +179,12 @@ export default function EmailListPage() {
     else if (status === listStatus.CERTIFICATE_ASSIGNMENT_IN_PROGRESS) return 1;
     else if (status === listStatus.CERTIFICATE_ASSIGNMENT_FAILED) return 1;
     else if (status === listStatus.CERTIFICATE_ASSIGNED) return 2;
-    else if (status === listStatus.EMAIL_SEND_IN_PROGRESS) return 2;
-    else if (status === listStatus.EMAIL_SEND_FAILED) return 2;
-    else if (status === listStatus.EMAIL_SENT) return 3;
+    else if (status === listStatus.CERTIFICATE_CREATION_IN_PROGRESS) return 2;
+    else if (status === listStatus.CERTIFICATE_CREATION_FAILED) return 2;
+    else if (status === listStatus.CERTIFICATE_CREATED) return 3;
+    else if (status === listStatus.EMAIL_SEND_IN_PROGRESS) return 3;
+    else if (status === listStatus.EMAIL_SEND_FAILED) return 3;
+    else if (status === listStatus.EMAIL_SENT) return 4;
     else return 0;
   };
 
@@ -157,20 +194,32 @@ export default function EmailListPage() {
         return "in-progress";
       } else if (currentStatus === listStatus.CERTIFICATE_ASSIGNMENT_FAILED) {
         return "error";
-      } else {
+      } else if (currentStatus !== listStatus.DRAFT) {
         return "success";
       }
     } else if (stepIndex === 2) {
+      if (currentStatus === listStatus.CERTIFICATE_CREATION_IN_PROGRESS) {
+        return "in-progress";
+      } else if (currentStatus === listStatus.CERTIFICATE_CREATION_FAILED) {
+        return "error";
+      } else if (
+        currentStatus !== listStatus.DRAFT &&
+        currentStatus !== listStatus.CERTIFICATE_ASSIGNMENT_IN_PROGRESS &&
+        currentStatus !== listStatus.CERTIFICATE_ASSIGNMENT_FAILED &&
+        currentStatus !== listStatus.CERTIFICATE_ASSIGNED
+      ) {
+        return "success";
+      }
+    } else if (stepIndex === 3) {
       if (currentStatus === listStatus.EMAIL_SEND_IN_PROGRESS) {
         return "in-progress";
       } else if (currentStatus === listStatus.EMAIL_SEND_FAILED) {
         return "error";
-      } else {
+      } else if (currentStatus === listStatus.EMAIL_SENT) {
         return "success";
       }
-    } else {
-      return "default";
     }
+    return "default";
   };
 
   const getButtonProps = (status) => {
@@ -192,6 +241,22 @@ export default function EmailListPage() {
     }
     if (status === listStatus.CERTIFICATE_ASSIGNED) {
       return {
+        text: "Create Certificates",
+        onClick: handleCreateCertificates,
+        disabled: false,
+        show: true,
+      };
+    }
+    if (status === listStatus.CERTIFICATE_CREATION_FAILED) {
+      return {
+        text: "Retry Certificate Creation",
+        onClick: handleCreateCertificates,
+        disabled: false,
+        show: true,
+      };
+    }
+    if (status === listStatus.CERTIFICATE_CREATED) {
+      return {
         text: "Send Emails",
         onClick: handleSendEmails,
         disabled: false,
@@ -207,6 +272,7 @@ export default function EmailListPage() {
       };
     }
     if (
+      status === listStatus.CERTIFICATE_CREATION_IN_PROGRESS ||
       status === listStatus.CERTIFICATE_ASSIGNMENT_IN_PROGRESS ||
       status === listStatus.EMAIL_SEND_IN_PROGRESS
     ) {
@@ -252,6 +318,10 @@ export default function EmailListPage() {
                 listStatus.CERTIFICATE_ASSIGNMENT_FAILED ? (
                 <AssignmentIcon />
               ) : currentList.status === listStatus.CERTIFICATE_ASSIGNED ||
+                currentList.status ===
+                  listStatus.CERTIFICATE_CREATION_FAILED ? (
+                <WorkIcon />
+              ) : currentList.status === listStatus.CERTIFICATE_CREATED ||
                 currentList.status === listStatus.EMAIL_SEND_FAILED ? (
                 <SendIcon />
               ) : (
@@ -268,7 +338,9 @@ export default function EmailListPage() {
 
       {currentList &&
         (currentList.status === listStatus.CERTIFICATE_ASSIGNMENT_IN_PROGRESS ||
-          currentList.status === listStatus.EMAIL_SEND_IN_PROGRESS) && (
+          currentList.status === listStatus.EMAIL_SEND_IN_PROGRESS ||
+          currentList.status ===
+            listStatus.CERTIFICATE_CREATION_IN_PROGRESS) && (
           <Alert severity="info" sx={{ mb: 3 }}>
             The process is running in the background. Refresh the page manually
             to see the latest status.
