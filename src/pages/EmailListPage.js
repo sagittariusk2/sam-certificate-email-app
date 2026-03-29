@@ -94,7 +94,7 @@ export default function EmailListPage() {
     var tempList = await appwriteDatabases.getDocument(
       db,
       collection.emailLists,
-      listId
+      listId,
     );
 
     tempList.list = tempList.list.map((x) => JSON.parse(x));
@@ -115,7 +115,7 @@ export default function EmailListPage() {
     appwriteFunctions.createExecution(
       "create-certs",
       JSON.stringify({ campaignId: currentList.$id }),
-      true
+      true,
     );
 
     setSnackbar({
@@ -137,7 +137,7 @@ export default function EmailListPage() {
     appwriteFunctions.createExecution(
       "send-email",
       JSON.stringify({ campaignId: currentList.$id }),
-      true
+      true,
     );
 
     setSnackbar({
@@ -159,7 +159,7 @@ export default function EmailListPage() {
     appwriteFunctions.createExecution(
       "create-email-obj",
       JSON.stringify({ campaignId: currentList.$id }),
-      true
+      true,
     );
 
     setSnackbar({
@@ -296,7 +296,7 @@ export default function EmailListPage() {
   };
 
   return (
-    <Container maxWidth="md" sx={{ mt: 4 }}>
+    <Container maxWidth="lg" sx={{ mt: 4 }}>
       <Box
         sx={{
           display: "flex",
@@ -441,6 +441,16 @@ export default function EmailListPage() {
                       py: 2,
                     }}
                   >
+                    Event
+                  </TableCell>
+                  <TableCell
+                    sx={{
+                      fontWeight: "bold",
+                      color: "white",
+                      fontSize: 16,
+                      py: 2,
+                    }}
+                  >
                     Certificate
                   </TableCell>
                   <TableCell
@@ -475,6 +485,7 @@ export default function EmailListPage() {
                         name={email.name}
                         college={email.college}
                         hour={email.hour}
+                        event={email.event}
                         listId={listId}
                         appwriteDatabases={appwriteDatabases}
                         index={index}

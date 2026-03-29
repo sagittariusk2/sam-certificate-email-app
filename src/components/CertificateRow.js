@@ -8,6 +8,7 @@ export default function CertificateRow({
   name,
   college,
   hour,
+  event,
   listId,
   appwriteDatabases,
   index, // Add index prop
@@ -27,7 +28,7 @@ export default function CertificateRow({
             Query.equal("email_list_id", listId),
             Query.equal("email", email),
             Query.equal("name", name),
-          ]
+          ],
         );
         if (response.total > 0) {
           const certificate = response.documents[0];
@@ -54,6 +55,7 @@ export default function CertificateRow({
         {college && college.trim() !== "" ? college : "--------"}
       </TableCell>
       <TableCell>{hour}</TableCell>
+      <TableCell>{event && event.trim() !== "" ? event : "--------"}</TableCell>
       <TableCell>
         {isLoading ? (
           <Skeleton animation="wave" width={120} />

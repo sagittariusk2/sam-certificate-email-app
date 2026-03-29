@@ -67,7 +67,7 @@ function AllListsPage() {
           Query.orderDesc("$createdAt"),
           Query.limit(rowsPerPage),
           Query.offset(offset),
-        ]
+        ],
       );
 
       setTotalItems(response.total);
@@ -76,7 +76,7 @@ function AllListsPage() {
       for (let i in emailLists) {
         emailLists[i].list = emailLists[i].list.map((x) => JSON.parse(x));
         emailLists[i].$createdAt = new Date(
-          emailLists[i].$createdAt
+          emailLists[i].$createdAt,
         ).toLocaleString();
       }
 
@@ -131,9 +131,9 @@ function AllListsPage() {
       const lines = content.split("\n");
 
       const header = lines[0].split(",").map((h) => h.trim().toLowerCase());
-      const requiredColumns = ["name", "email", "hour", "college"];
+      const requiredColumns = ["name", "email", "hour", "college", "event"];
       const missingColumns = requiredColumns.filter(
-        (col) => !header.includes(col)
+        (col) => !header.includes(col),
       );
 
       if (missingColumns.length > 0) {
@@ -150,6 +150,11 @@ function AllListsPage() {
         return;
       }
 
+      const columnIndex = header.reduce((acc, col, idx) => {
+        acc[col] = idx;
+        return acc;
+      }, {});
+
       const uniqueSet = new Set();
       const parsedEmails = [];
       const invalidEmails = [];
@@ -160,11 +165,12 @@ function AllListsPage() {
         if (lines[i].trim() === "") continue;
 
         const values = lines[i].split(",");
-        if (values.length >= 4) {
-          const name = values[0]?.trim() || "";
-          const email = values[1]?.trim() || "";
-          const college = values[2]?.trim() || "";
-          const hour = values[3]?.trim() || "";
+        if (values.length >= requiredColumns.length) {
+          const name = values[columnIndex.name]?.trim() || "";
+          const email = values[columnIndex.email]?.trim() || "";
+          const college = values[columnIndex.college]?.trim() || "";
+          const hour = values[columnIndex.hour]?.trim() || "";
+          const eventField = values[columnIndex.event]?.trim() || "";
 
           // Validate email
           if (!validateEmail(email)) {
@@ -175,7 +181,7 @@ function AllListsPage() {
           // Uniqueness only on name+email
           const uniqueKey = `${name}|${email}`;
 
-          if (name && email && hour) {
+          if (name && email && hour && eventField) {
             if (uniqueSet.has(uniqueKey)) {
               duplicatePairs.push({ name, email, line: i + 1 });
             } else {
@@ -185,6 +191,7 @@ function AllListsPage() {
                 email: email,
                 hour: hour,
                 college: college,
+                event: eventField,
               });
             }
           }
@@ -260,7 +267,7 @@ function AllListsPage() {
         {
           name: listNameInput,
           list: newParsedData,
-        }
+        },
       );
 
       fetchEmailLists();
@@ -294,7 +301,7 @@ function AllListsPage() {
   };
 
   return (
-    <Container maxWidth="md" sx={{ mt: 4 }}>
+    <Container maxWidth="lg" sx={{ mt: 4 }}>
       <Box
         sx={{
           display: "flex",
@@ -455,7 +462,7 @@ function AllListsPage() {
         <DialogContent>
           <DialogContentText sx={{ mb: 2 }}>
             Upload a CSV file with email data. The CSV should have columns for
-            email, name, hour and college.
+            email, name, hour, college, and event.
           </DialogContentText>
 
           <TextField
@@ -491,8 +498,8 @@ function AllListsPage() {
               <strong>Note:</strong>
               <ul style={{ margin: 0, paddingLeft: "1.2em" }}>
                 <li>
-                  <b>name</b>, <b>email</b>, <b>college</b>, <b>hour</b> should
-                  be <b>mandatory</b> in the CSV file.
+                  <b>name</b>, <b>email</b>, <b>college</b>, <b>hour</b>, and{" "}
+                  <b>event</b> should be <b>mandatory</b> in the CSV file.
                 </li>
                 <li>
                   There should be <b>no duplicate row</b> (same name & email).
@@ -558,7 +565,7 @@ function AllListsPage() {
                     borderBottom: "1px solid #bbdefb",
                   }}
                 >
-                  name,email,college,hour
+                  name,email,college,hour,event
                 </div>
                 <div
                   style={{
@@ -567,7 +574,8 @@ function AllListsPage() {
                     borderBottom: "1px solid #e1bee7",
                   }}
                 >
-                  Sam,volunteer@sam.org,Indian Institution of Technology Patna,2
+                  Sam,volunteer@sam.org,Indian Institution of Technology
+                  Patna,2,Citizenship Drive
                 </div>
                 <div
                   style={{
@@ -575,7 +583,8 @@ function AllListsPage() {
                     padding: "4px 8px",
                   }}
                 >
-                  John,john@example.com,University of Delhi,3
+                  John,john@example.com,University of Delhi,3,Education
+                  Awareness
                 </div>
               </Box>
             </Box>
